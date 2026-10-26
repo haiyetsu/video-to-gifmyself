@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#171717">
+<title>视频转 GIF</title>
+<style>
+:root{color-scheme:dark;--bg:#101010;--panel:#1b1b1b;--line:#343434;--text:#f5f5f5;--muted:#aaa;--accent:#b7f36b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:720px;margin:auto;padding:20px 16px 42px}
+header{padding:10px 0 18px}h1{font-size:28px;letter-spacing:-.5px;margin:0 0 6px}header p{color:var(--muted);margin:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin:14px 0}
+label,.label{display:block;font-weight:650;margin-bottom:8px}
+input,select,button{font:inherit}
+input[type=file]{width:100%;padding:12px;border:1px dashed #555;border-radius:12px;background:#151515;color:var(--muted)}
+video{display:block;width:100%;max-height:360px;background:#080808;border-radius:12px;margin-top:12px}
+.hidden{display:none!important}
+.row{display:flex;gap:12px;align-items:center}.row>*{flex:1;min-width:0}
+.value{color:var(--accent);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent);padding:8px 0}
+input[type=number],select{width:100%;padding:11px;border-radius:10px;background:#111;color:var(--text);border:1px solid #454545}
+small,.hint{color:var(--muted);font-size:13px}
+button,.download{display:block;width:100%;border:0;border-radius:12px;padding:14px 16px;background:var(--accent);color:#111;font-weight:750;text-align:center;text-decoration:none;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+.secondary{background:#2b2b2b;color:var(--text);border:1px solid #444;margin-top:10px}
+.preview{width:100%;max-height:360px;object-fit:contain;background:#080808;border-radius:12px}
+.progress{height:8px;background:#333;border-radius:99px;overflow:hidden;margin:12px 0}
+.progress>div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.status{margin-top:10px;color:var(--muted);font-size:14px;white-space:pre-wrap}
+.note{border-left:3px solid var(--accent);padding:8px 12px;color:#c9c9c9;font-size:13px}
+footer{color:#888;font-size:12px;text-align:center;margin-top:24px}
+</style>
+</head>
+<body>
+<main>
+<header><h1>视频转 GIF</h1><p>剪出精彩片段，调节画质，生成并保存 GIF。</p></header>
+
+<section class="panel">
+<label for="file">① 选择视频</label>
+<input id="file" type="file" accept="video/*">
+<video id="video" controls playsinline class="hidden"></video>
+<p id="videoInfo" class="hint">视频会在你的设备浏览器中处理，不会主动上传到服务器。</p>
+</section>
+
+<section id="settings" class="panel hidden">
+<div class="row"><label for="start">② 截取片段</label><span class="value" id="durationLabel">时长：0 秒</span></div>
+<div class="row">
+<div><label for="start">开始时间（秒）</label><input id="start" type="number" min="0" step="0.1" value="0"></div>
+<div><label for="end">结束时间（秒）</label><input id="end" type="number" min="0" step="0.1" value="3"></div>
+</div>
+<div style="margin-top:12px"><span class="label">快速调整开始位置 <span class="value" id="startVal">0.0s</span></span><input id="startRange" type="range" min="0" max="3" step="0.1" value="0"></div>
+<div><span class="label">快速调整结束位置 <span class="value" id="endVal">3.0s</span></span><input id="endRange" type="range" min="0" max="3" step="0.1" value="3"></div>
+<p class="hint">建议先做 2–6 秒的 GIF。时长越长，生成文件通常越大。</p>
+</section>
+
+<section id="quality" class="panel hidden">
+<label>③ 画质设置</label>
+<div class="row">
+<div><label for="width">画面宽度</label><select id="width"><option value="240">240 px（小文件）</option><option value="320" selected>320 px（推荐）</option><option value="480">480 px（更清晰）</option><option value="640">640 px（大文件）</option></select></div>
+<div><label for="fps">帧率</label><select id="fps"><option value="8">8 FPS（小文件）</option><option value="10" selected>10 FPS（推荐）</option><option value="15">15 FPS（更流畅）</option><option value="20">20 FPS（较大）</option></select></div>
+</div>
+<div style="margin-top:14px"><label for="qualityRange">颜色质量 <span class="value" id="qualityVal">中等</span></label><input id="qualityRange" type="range" min="5" max="20" step="1" value="10"><div class="row"><small>文件较小</small><small style="text-align:right">颜色更细腻</small></div></div>
+<p class="hint">更高分辨率、帧率和颜色质量通常会增加文件大小与处理时间。</p>
+</section>
+
+<section id="convertPanel" class="panel hidden">
+<label>④ 生成 GIF</label>
+<div class="note">首次使用需要加载 GIF 编码组件，请保持网络连接。处理时间取决于视频长度和手机性能。</div>
+<button id="convert" style="margin-top:14px">生成 GIF</button>
+<div class="progress"><div id="bar"></div></div>
+<div id="status" class="status">等待转换</div>
+</section>
+
+<section id="result" class="panel hidden">
+<label>⑤ 预览与保存</label>
+<img id="gifPreview" class="preview" alt="生成的 GIF 预览">
+<p id="resultInfo" class="hint"></p>
+<a id="download" class="download" download="video.gif">下载 GIF</a>
+<button id="again" class="secondary">重新调整并生成</button>
+</section>
+<footer>本工具在浏览器中本地处理视频。大视频可能占用较多内存。</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/gif.js.optimized/dist/gif.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const fileInput=$('file'), video=$('video');
+let objectUrl=null, gifUrl=null, videoDuration=0, selectedFile=null;
+const show=(id,yes=true)=>$(id).classList.toggle('hidden',!yes);
+const fmt=n=>Number(n).toFixed(1);
+function syncFromInputs(){
+ let s=Number($('start').value)||0, e=Number($('end').value)||0;
+ s=Math.max(0,Math.min(s,Math.max(0,videoDuration-.1)));
+ e=Math.max(s+.1,Math.min(e,videoDuration));
+ $('start').value=fmt(s); $('end').value=fmt(e);
+ $('startRange').value=s; $('endRange').value=e;
+ $('startVal').textContent=fmt(s)+'s'; $('endVal').textContent=fmt(e)+'s';
+ $('durationLabel').textContent='时长：'+fmt(e-s)+' 秒';
+}
+function syncFromRanges(which){
+ if(which==='start'){ $('start').value=$('startRange').value; if(Number($('end').value)<=Number($('start').value)) $('end').value=Math.min(videoDuration,Number($('start').value)+.5); }
+ else {$('end').value=$('endRange').value; if(Number($('end').value)<=Number($('start').value)) $('start').value=Math.max(0,Number($('end').value)-.5);}
+ syncFromInputs();
+}
+fileInput.addEventListener('change',()=>{
+ const f=fileInput.files&&fileInput.files[0]; if(!f)return;
+ selectedFile=f;
+ if(objectUrl)URL.revokeObjectURL(objectUrl);
+ objectUrl=URL.createObjectURL(f); video.src=objectUrl; video.classList.remove('hidden');
+ video.onloadedmetadata=()=>{
+   videoDuration=video.duration;
+   if(!Number.isFinite(videoDuration)||videoDuration<=0){$('videoInfo').textContent='无法读取视频时长，请尝试其他视频格式。';return;}
+   $('videoInfo').textContent=`${f.name} · ${fmt(videoDuration)} 秒 · ${(f.size/1024/1024).toFixed(1)} MB`;
+   $('start').value='0'; $('end').value=fmt(Math.min(3,videoDuration));
+   for(const id of ['settings','quality','convertPanel'])show(id);
+   $('startRange').max=videoDuration; $('endRange').max=videoDuration;
+   $('startRange').value=0; $('endRange').value=Math.min(3,videoDuration);
+   syncFromInputs(); show('result',false); $('status').textContent='等待转换'; $('bar').style.width='0%';
+ };
+});
+$('start').addEventListener('change',syncFromInputs); $('end').addEventListener('change',syncFromInputs);
+$('startRange').addEventListener('input',()=>syncFromRanges('start')); $('endRange').addEventListener('input',()=>syncFromRanges('end'));
+$('qualityRange').addEventListener('input',()=>{let v=Number($('qualityRange').value);$('qualityVal').textContent=v<8?'偏小':v<14?'中等':'较高';});
+$('again').addEventListener('click',()=>{show('result',false);$('convertPanel').scrollIntoView({behavior:'smooth',block:'start'});});
+function seekTo(t){return new Promise((resolve,reject)=>{if(Math.abs(video.currentTime-t)<.015&&video.readyState>=2){resolve();return;}const done=()=>{cleanup();resolve();},fail=()=>{cleanup();reject(new Error('视频定位失败'));},cleanup=()=>{video.removeEventListener('seeked',done);video.removeEventListener('error',fail);};video.addEventListener('seeked',done,{once:true});video.addEventListener('error',fail,{once:true});video.currentTime=t;});}
+$('convert').addEventListener('click',async()=>{
+ if(!selectedFile)return;
+ if(typeof GIF==='undefined'){$('status').textContent='编码组件加载失败。请检查网络后刷新页面重试。';return;}
+ const start=Number($('start').value),end=Number($('end').value),fps=Number($('fps').value),width=Number($('width').value),quality=Number($('qualityRange').value);
+ if(!(end>start)||end-start>30){$('status').textContent='请选择有效片段。为避免手机内存不足，请将片段控制在 30 秒以内。';return;}
+ if(video.readyState<2){$('status').textContent='视频仍在加载，请稍后再试。';return;}
+ const btn=$('convert');btn.disabled=true;show('result',false);$('bar').style.width='0%';$('status').textContent='正在准备视频…';
+ try{
+   const ratio=video.videoHeight/video.videoWidth||1, height=Math.max(1,Math.round(width*ratio));
+   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+   const ctx=canvas.getContext('2d',{willReadFrequently:true});
+   // Load the worker source first, then create a same-origin Blob URL.
+   // This avoids Worker constructor errors caused by cross-origin worker scripts.
+   const workerResponse = await fetch('https://cdn.jsdelivr.net/npm/gif.js.optimized/dist/gif.worker.js');
+   if (!workerResponse.ok) throw new Error('无法加载 GIF 编码线程，请检查网络连接后重试');
+   const workerSource = await workerResponse.text();
+   const workerBlobUrl = URL.createObjectURL(new Blob([workerSource], {type:'application/javascript'}));
+   const gif=new GIF({workers:2,quality:quality,width:width,height:height,workerScript:workerBlobUrl, repeat:0});
+   const total=Math.ceil((end-start)*fps);
+   for(let i=0;i<total;i++){
+     const t=Math.min(end-.001,start+i/fps);
+     await seekTo(t);
+     ctx.drawImage(video,0,0,width,height);
+     gif.addFrame(ctx,{copy:true,delay:Math.round(1000/fps)});
+     $('bar').style.width=Math.round((i+1)/total*75)+'%';
+     $('status').textContent=`正在读取帧：${i+1}/${total}`;
+     await new Promise(r=>setTimeout(r,0));
+   }
+   $('status').textContent='正在编码 GIF…';
+   gif.on('progress',p=>{$('bar').style.width=(75+Math.round(p*25))+'%';$('status').textContent='正在编码 GIF… '+Math.round(p*100)+'%';});
+   const blob=await new Promise((resolve,reject)=>{gif.on('finished',resolve);gif.on('abort',()=>reject(new Error('转换已取消')));gif.render();});
+   URL.revokeObjectURL(workerBlobUrl);
+   if(gifUrl)URL.revokeObjectURL(gifUrl);
+   gifUrl=URL.createObjectURL(blob);$('gifPreview').src=gifUrl;$('download').href=gifUrl;
+   $('download').download=(selectedFile.name.replace(/\.[^.]+$/,'')||'video')+'.gif';
+   $('resultInfo').textContent=`片段 ${fmt(end-start)} 秒 · ${width} × ${height} px · ${fps} FPS · 文件 ${(blob.size/1024/1024).toFixed(2)} MB`;
+   $('bar').style.width='100%';$('status').textContent='转换完成！';show('result');$('result').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(err){$('status').textContent='转换失败：'+(err&&err.message?err.message:'未知错误')+'。可以尝试缩短片段、降低分辨率或刷新网页。';}
+ finally{btn.disabled=false;}
+});
+window.addEventListener('beforeunload',()=>{if(objectUrl)URL.revokeObjectURL(objectUrl);if(gifUrl)URL.revokeObjectURL(gifUrl);});
+</script>
+</body>
+</html>
